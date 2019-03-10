@@ -1,112 +1,140 @@
-var readingsUrl = 'https://m9drg2gpya.execute-api.us-east-2.amazonaws.com/default/getRequest';
-var userid = 1; // should change based on current session
-var key = 'sS6BW9aZNY1NMndVf6s9V6LegVVn7WPj5xuVnq9b';
+var getAllSensorValuesUrl = 'https://m9drg2gpya.execute-api.us-east-2.amazonaws.com/default/getRequest';
+var getAllSensorValuesKey = 'sS6BW9aZNY1NMndVf6s9V6LegVVn7WPj5xuVnq9b';
 
-var device = 1;
+var getTodaysSensorValuesUrl = 'https://9ojj5uftgf.execute-api.us-east-2.amazonaws.com/default/sensorReadingsToday';
+var getTodaysSensorValuesKey = 'kx4tWgjZ8982fSSbI1NBy7QgLw1Ep2AT7bpqZgTD';
+
+var userid = 1; // should change based on current session
 
 var device1Temps = [];
 var device1Humidities = [];
 var device2Temps = [];
 var device2Humidities = [];
 
-/* CHECK TEMPERATURES */
-function checkTemps(deviceid, temps) {
+var todaysDevice1Temps = [];
+var todaysDevice1Humidities = [];
+var todaysDevice2Temps = [];
+var todaysDevice2Humidities = [];
+
+
+/* CHECK TEMPERATURE */
+function temperatureCheck(deviceid, temps) {
+    // First we get the current temperature
+    let latestReading = temps[0];
     
-    // Get current temperature timestamp
-    let currentTemp = temps[0];
+    // Get previous timestamps we want relevant data for
+    timestamps = getPreviousTimestamps(new Date(latestReading.timestamp));
     
-    // Get timestamps for previous days at the same time
-    let today = new Date(currentTemp.timestamp);
-    let oneDayAgo = dateFns.subDays(today, 1);
-    let twoDaysAgo = dateFns.subDays(today, 2);
-    /*console.log(today);
-    console.log(oneDayAgo);
-    console.log(twoDaysAgo);*/
-    
-    /* here we will return readings from previous dates, put them into
-       variables and find which readings are the closest to our created timestamps */
-    
-    var dates = [];
-    for(var i = 0; i < temps.length; i++) {
-        dates = dates.concat(temps[i].timestamp);
+    // Get previous sensor readings from similar times
+    let previousReadings = [];
+    for(let i = 0; i < timestamps.length; i++) {
+        previousReadings = previousReadings.concat(getReadingByTimestamp(temps, timestamps[i]));
     }
-    // yesterdays, the day befores, maybe a year or two ago as well
-    let oneDayAgoTemp = temps[dateFns.closestIndexTo(oneDayAgo, dates)].sensor_value;
-    let twoDaysAgoTemp = temps[dateFns.closestIndexTo(twoDaysAgo, dates)].sensor_value;
     
-    avgTemp = (oneDayAgoTemp + twoDaysAgoTemp)/2;
+    // Get relevant MetOffice readings
     
-    // Here we have a small buffer rather than needing to match the temperature perfectly
-    if(currentTemp.sensor_value > avgTemp + 3) {
-        $('#device' + deviceid + 'TempStatus').html("Too Hot!");
+    
+    // Work out general preferred temp
+    let averageTemp = null;
+    for(let i = 0; i < previousReadings.length; i++) {
+        averageTemp = averageTemp + previousReadings[i];
     }
-    else if(currentTemp.sensor_value < avgTemp - 3) {
-        $('#device' + deviceid + 'TempStatus').html("Too Cold!");
+    averageTemp = averageTemp/previousReadings.length;
+    
+    // Compare it to the current temp and take appropriate action
+    // We use a small buffer rather than needing it to match the temperature perfectly
+    if(latestReading.sensor_value > averageTemp + 3) {
+        $('#device' + deviceid + 'TempStatus').html("Too hot, turn down heating");
+    }
+    else if(latestReading.sensor_value < averageTemp - 3) {
+        $('#device' + deviceid + 'TempStatus').html("Too cold, turn up heating");
     }
     else {
-        $('#device' + deviceid + 'TempStatus').html("Temperature OK!");
-    }
+        $('#device' + deviceid + 'TempStatus').html("Temperature OK");
+    }    
 }
 
-/* CHECK TEMPERATURES */
-function checkHumidity(deviceid, humidities) {
+/* CHECK HUMIDITY */
+function humidityCheck(deviceid, humidities) {
+    // First we get the current temperature
+    let latestReading = humidities[0];
     
-    // Get current temperature timestamp
-    let currentHumidity = humidities[0];
+    // Get previous timestamps we want relevant data for
+    timestamps = getPreviousTimestamps(new Date(latestReading.timestamp));
     
-    // Get timestamps for previous days at the same time
-    let today = new Date(currentHumidity.timestamp);
-    let oneDayAgo = dateFns.subDays(today, 1);
-    let twoDaysAgo = dateFns.subDays(today, 2);
-    
-    /* here we will return readings from previous dates, put them into
-       variables and find which readings are the closest to our created timestamps */
-    
-    var dates = [];
-    for(var i = 0; i < humidities.length; i++) {
-        dates = dates.concat(humidities[i].timestamp);
+    // Get previous sensor readings from similar times
+    let previousReadings = [];
+    for(let i = 0; i < timestamps.length; i++) {
+        previousReadings = previousReadings.concat(getReadingByTimestamp(humidities, timestamps[i]));
     }
-    // yesterdays, the day befores, maybe a year or two ago as well
-    let oneDayAgoHumidity = humidities[dateFns.closestIndexTo(oneDayAgo, dates)].sensor_value;
-    let twoDaysAgoHumidity = humidities[dateFns.closestIndexTo(twoDaysAgo, dates)].sensor_value;
     
-    avgHumidity = (oneDayAgoHumidity + twoDaysAgoHumidity)/2;
-    
-    // Here we have a small buffer rather than needing to match the temperature perfectly
-    if(currentHumidity.sensor_value > avgHumidity + 3) {
-        $('#device' + deviceid + 'HumidityStatus').html("Too Humid!");
+    // Work out general humidity
+    let averageHumidity = null;
+    for(let i = 0; i < previousReadings.length; i++) {
+        averageHumidity = averageHumidity + previousReadings[i];
     }
-    else if(currentHumidity.sensor_value < avgHumidity - 3) {
-        $('#device' + deviceid + 'HumidityStatus').html("Too Dry!");
+    averageHumidity = averageHumidity/previousReadings.length;
+    
+    // Compare it to the current temp and take appropriate action
+    // We use a small buffer rather than needing it to match the temperature perfectly
+    if(latestReading.sensor_value > averageHumidity + 3) {
+        $('#device' + deviceid + 'HumidityStatus').html("Too humid");
+    }
+    else if(latestReading.sensor_value < averageHumidity - 3) {
+        $('#device' + deviceid + 'HumidityStatus').html("Too dry");
     }
     else {
-        $('#device' + deviceid + 'HumidityStatus').html("Humidity OK!");
+        $('#device' + deviceid + 'HumidityStatus').html("Humidity OK");
+    }     
+}
+
+// This compares readings from the two different devices to look for discrepancies
+// These could be caused by technical issues or environmental issues e.g. poor insulation
+function checkDiscrepancies(device1Readings, device2Readings) {
+    
+}
+
+// This checks for erratic readings caused by things such as environmental events 
+// and technical problems
+function checkFluctuations(deviceid, readings, sensor) {
+    // TEMP HACK WHILE I FIGURE OUT THE 'TODAYS READINGS' ENDPOINT
+    todaysReadings = [];
+    for(let i = 0; i < 30; i++) {
+        todaysReadings = todaysReadings.concat(readings[i]);
     }
-}
-
-/* CHECK DEVICE CONSISTENCY */
-// Compared each devices readings to eachother over a 2 week period
-function checkDeviceConsistency(device1Readings, device2Readings, sensorType) {
-    today = new Date();
-    twoWeeksAgo = dateFns.subWeeks(today, 2);
-    console.log(twoWeeksAgo);
+    
+    dateToTest = new Date(todaysReadings[0].timestamp);
+    // Get the past two hours' readings
+    twoHoursReadings = getLastTwoHoursReadings(todaysReadings, dateToTest);
+    // END OF HACK
+    
+    for(let i = 0; i < twoHoursReadings.length - 1; i++) {
+        let diff = null;
+        
+        diff = Math.abs(twoHoursReadings[i].sensor_value - twoHoursReadings[i+1].sensor_value);
+        console.log(diff);
+        if(diff > 6) {
+            if(twoHoursReadings[i].sensor_value > twoHoursReadings[i+1].sensor_value) {
+                console.log("WARNING: Temperature Drop of " + diff +  " Detected");
+            }
+            else if (twoHoursReadings[i].sensor_value < twoHoursReadings[i+1].sensor_value) {
+                console.log("WARNING: Temperature Rise of " + diff +  " Detected");
+            }
+        }
+    }
     
 }
 
+var intervalID = setInterval(function() {
+    console.log("Interval reached");
+}, 300000);
 
-
-/* CHECK DEVICE BEHAVIOUR */
-function checkDeviceBehaviour() {
-    
-}
-
-
-/* PERIODICALLY GET DEVICE READINGS */
-(function getUserData() {
+/* PERIODICALLY GET ALL DEVICE READINGS */
+(function getAllUserData() {
   $.ajax({
-    url: readingsUrl,
+    url: getAllSensorValuesUrl,
     headers: {
-      "X-Api-Key":key,
+      "X-Api-Key":getAllSensorValuesKey,
     },
     data: {
         'user_id': userid
@@ -139,17 +167,60 @@ function checkDeviceBehaviour() {
                 }
             }
         }
-        checkTemps(1, device1Temps);
-        checkTemps(2, device2Temps);
+        // Device 1 checks
+        temperatureCheck(1, device1Temps);
+        humidityCheck(1, device1Humidities);
         
-        checkHumidity(1, device1Humidities);
-        checkHumidity(2, device2Humidities);
+        // Device 2 checks
+        temperatureCheck(2, device2Temps);
+        humidityCheck(2, device2Humidities);
         
-        checkDeviceConsistency(device1Temps, device2Temps, 'TEMP');
+        // Check for reading fluctuations
+        checkFluctuations(1, device1Temps, 'TEMP');
     },
     complete: function() {
       // Schedule the next request when the current one's complete
-      //setTimeout(getUserData, 60000); !!! UNCOMMENT THIS !!!
+      //setTimeout(getUserData, 1800000); (every half an hour) !!! UNCOMMENT THIS !!! 
     }
   });
 })();
+
+
+
+/* HELPER FUNCTIONS */
+// This gives us the previous timestamps we need to find older readings
+function getPreviousTimestamps(timestamp) {
+    let oneDayAgo = dateFns.subDays(timestamp, 1);
+    let twoDaysAgo = dateFns.subDays(timestamp, 2);
+    let threeDayAgo = dateFns.subDays(timestamp, 3);
+    let fourDaysAgo = dateFns.subDays(timestamp, 4);
+    
+    timestamps = [oneDayAgo, twoDaysAgo, threeDayAgo, fourDaysAgo];
+    return timestamps;
+}
+
+// Given an array of readings and a timestamp, this function
+// will return the reading with a timestamp the closest to the supplied one
+function getReadingByTimestamp(readings, timestamp) {
+    var dates = [];
+    for(var i = 0; i < readings.length; i++) {
+        dates = dates.concat(readings[i].timestamp);
+    }
+    // yesterdays, the day befores, maybe a year or two ago as well
+    let reading = readings[dateFns.closestIndexTo(timestamp, dates)].sensor_value;
+    return reading;
+}
+
+// Given an array of readings, this function returns readings
+// taken in the past hour.
+// somewhat hacky, timestamp lets us manipulate for testing purposes
+function getLastTwoHoursReadings(readings, timestamp) {
+    twoHoursReadings = [];
+    for(let i = 0; i < readings.length; i++) {
+        if(dateFns.isWithinRange(new Date(readings[i].timestamp), dateFns.subHours(timestamp, 2), timestamp)) {
+            twoHoursReadings = twoHoursReadings.concat(readings[i]);
+        }
+    }
+    twoHoursReadings.sort(function(a, b) { return new Date(a.timestamp) - new Date(b.timestamp)});
+    return twoHoursReadings;
+}

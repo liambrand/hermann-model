@@ -90,8 +90,28 @@ function humidityCheck(deviceid, humidities) {
 
 // This compares readings from the two different devices to look for discrepancies
 // These could be caused by technical issues or environmental issues e.g. poor insulation
-function checkDiscrepancies(device1Readings, device2Readings) {
+function checkDiscrepancies(device1Readings, device2Readings) {   
+    console.log(device1Readings);
+    console.log(device2Readings);
     
+    // Iterate through device 1 readings
+    for(let i = 0; i < device1Readings.length; i++) {
+        
+        // Get some dates
+        let startDate = new Date(dateFns.subHours(new Date(device1Readings[i].timestamp, 1)));
+        let endDate = new Date(device1Readings[i].timestamp);
+        
+        // If device 2 reading's timestamp is within an hour it's comparable
+        try {
+            if(dateFns.isWithinRange(new Date(device2Readings[i].timestamp), startDate, endDate)) {
+                // compare them and do something with them here
+                console.log("hello");
+            }
+        }
+        catch(TypeError) {
+            console.log("No Reading Available");
+        }
+    }
 }
 
 // This checks for erratic readings caused by things such as environmental events 
@@ -108,18 +128,29 @@ function checkFluctuations(deviceid, readings, sensor) {
     twoHoursReadings = getLastTwoHoursReadings(todaysReadings, dateToTest);
     // END OF HACK
     
+    let discrepencies = 0;
     for(let i = 0; i < twoHoursReadings.length - 1; i++) {
         let diff = null;
         
         diff = Math.abs(twoHoursReadings[i].sensor_value - twoHoursReadings[i+1].sensor_value);
-        console.log(diff);
+        //console.log(twoHoursReadings[i].sensor_value);
+        //console.log(twoHoursReadings[i+1].sensor_value);
+        //console.log(diff);
         if(diff > 6) {
             if(twoHoursReadings[i].sensor_value > twoHoursReadings[i+1].sensor_value) {
-                console.log("WARNING: Temperature Drop of " + diff +  " Detected");
+                //console.log("WARNING: Temperature Drop of " + diff +  " Detected");
+                $('#device' + deviceid + 'FluctuationsStatus').html("WARNING: Temperature Drop of " + diff +  " Detected");
+                discrepencies++;
             }
             else if (twoHoursReadings[i].sensor_value < twoHoursReadings[i+1].sensor_value) {
-                console.log("WARNING: Temperature Rise of " + diff +  " Detected");
+                //console.log("WARNING: Temperature Rise of " + diff +  " Detected");
+                $('#device' + deviceid + 'FluctuationsStatus').html("WARNING: Temperature Rise of " + diff +  " Detected");
+                discrepencies++;
             }
+        }
+        if(discrepencies >= 3) {
+            //console.log("Multiple discrepencies detected: consider contacting support");
+            $('#device' + deviceid + 'FluctuationsStatus').append("<p>Multiple discrepencies detected: consider contacting support</p>");
         }
     }
     
@@ -177,6 +208,10 @@ var intervalID = setInterval(function() {
         
         // Check for reading fluctuations
         checkFluctuations(1, device1Temps, 'TEMP');
+        //checkFluctuations(2, device2Temps, 'TEMP');
+        
+        // Check consistency across devices
+        checkDiscrepancies(device1Temps, device2Temps);
     },
     complete: function() {
       // Schedule the next request when the current one's complete
